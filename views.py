@@ -1,5 +1,6 @@
 import discord
 from data_manager import TRACKS_DATA
+from player import fit_message
 
 class TrackSelectView(discord.ui.View):
     def __init__(self, music_player):
@@ -25,32 +26,20 @@ class TrackSelectView(discord.ui.View):
             await interaction.followup.send("❌ You must be in a voice channel!", ephemeral=True)
             return
 
-        channel = interaction.user.voice.channel
-        guild_id = interaction.guild.id
-        voice_client = discord.utils.get(interaction.client.voice_clients, guild=interaction.guild)
+        guild = interaction.guild
 
         try:
-            if voice_client is None:
-                voice_client = await channel.connect()
-            elif voice_client.channel != channel:
-                await voice_client.move_to(channel)
-
-            if guild_id not in self.music_player.queues:
-                self.music_player.queues[guild_id] = []
-
-            self.music_player.queues[guild_id].append(selected_url)
-
-            if not voice_client.is_playing():
-                self.music_player.play_next(voice_client, guild_id)
+            await self.music_player.connect(interaction.user.voice.channel)
+            self.music_player.queues.setdefault(guild.id, []).append(selected_url)
 
             try:
                 await interaction.message.delete()
-            except:
+            except discord.HTTPException:
                 pass
 
-            music_ch = self.music_player.get_music_channel(interaction.guild)
-            await music_ch.send(
+            await interaction.channel.send(
                 f"🎧 User **{interaction.user.name}** selected track: **{track_name}** and added it to the queue!")
+            await self.music_player.play_next(guild)
         except Exception as e:
             await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
@@ -77,13 +66,12 @@ class LyricsSelectView(discord.ui.View):
 
         try:
             await interaction.message.delete()
-        except:
+        except discord.HTTPException:
             pass
 
-        music_ch = self.music_player.get_music_channel(interaction.guild)
         if selected_track:
-            await music_ch.send(
-                f"📜 **Lyrics for {selected_track['name']}:**\n\n{selected_track.get('lyrics', 'Lyrics not added yet.')}")
+            await interaction.channel.send(fit_message(
+                f"📜 **Lyrics for {selected_track['name']}:**\n\n{selected_track.get('lyrics', 'Lyrics not added yet.')}"))
         else:
             await interaction.followup.send("❌ Lyrics not found.", ephemeral=True)
 
