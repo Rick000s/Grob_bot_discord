@@ -24,10 +24,10 @@ YDL_OPTIONS = {
     'no_warnings': True,
 }
 
-# -reconnect_on_network_error ловить розриви з'єднання (помилка -10054 в лозі),
-# -loglevel fatal ховає шум від цих автоматичних перепідключень.
+# -reconnect_on_network_error ловить розриви з'єднання (помилка -10054 в лозі).
+# Вивід ffmpeg приховано в player.py (stderr=DEVNULL), бо це лише шум від перепідключень.
 FFMPEG_OPTIONS = {
-    'before_options': '-loglevel fatal -reconnect 1 -reconnect_streamed 1 '
+    'before_options': '-reconnect 1 -reconnect_streamed 1 '
                       '-reconnect_on_network_error 1 -reconnect_delay_max 5',
     'options': '-vn'
 }

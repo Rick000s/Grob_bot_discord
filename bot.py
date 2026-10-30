@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 
 import discord
@@ -8,6 +9,10 @@ from config import TOKEN, TARGET_USERNAMES, IDLE_DISCONNECT_SECONDS
 from data_manager import TRACKS_DATA, SPOTIFY_TRACKS
 from player import MusicPlayer, find_track, fit_message
 from views import TrackSelectView, LyricsSelectView, HelpSelectView
+from log_setup import setup_logging
+
+setup_logging()
+log = logging.getLogger("grob")
 
 intents = discord.Intents.default()
 intents.voice_states = True
@@ -24,7 +29,7 @@ idle_tasks = {}
 
 @bot.event
 async def on_ready():
-    print(f"Bot {bot.user} is ready to rock queues!")
+    log.info(f"Bot {bot.user} is ready to rock queues!")
 
 
 async def join_author_channel(message):
@@ -151,9 +156,9 @@ async def on_message(message):
                 await music_ch.send(f"🔁 Track **{track_name}** set to **infinite repeat**!")
 
     except discord.HTTPException as e:
-        print(f"[{guild.name}] Discord error: {e}")
+        log.error(f"[{guild.name}] Discord error: {e}")
     except Exception as e:
-        print(f"[{guild.name}] Command error: {e!r}")
+        log.exception(f"[{guild.name}] Command error: {e!r}")
         try:
             await music_ch.send(f"❌ Error: {e}")
         except discord.HTTPException:
@@ -168,7 +173,7 @@ async def leave_if_idle(guild):
     await asyncio.sleep(IDLE_DISCONNECT_SECONDS)
     voice_client = guild.voice_client
     if voice_client and voice_client.channel and not humans_in(voice_client.channel):
-        print(f"[{guild.name}] Voice channel is empty, leaving.")
+        log.info(f"[{guild.name}] Voice channel is empty, leaving.")
         await player.reset(guild)
 
 
@@ -196,10 +201,11 @@ async def on_voice_state_update(member, before, after):
             queue = player.queues.setdefault(guild.id, [])
             if not queue:
                 queue.extend(SPOTIFY_TRACKS)
-            print(f"User {member.name} joined voice! Starting playlist...")
+            log.info(f"User {member.name} joined voice! Starting playlist...")
             await player.play_next(guild)
         except Exception as e:
-            print(f"Voice module error: {e!r}")
+            log.exception(f"Voice module error: {e!r}")
 
 
-bot.run(TOKEN)
+# log_handler=None — використовуємо наше логування з log_setup.py
+bot.run(TOKEN, log_handler=None)

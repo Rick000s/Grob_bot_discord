@@ -1,5 +1,7 @@
 import asyncio
+import logging
 import random
+import subprocess
 
 import discord
 import yt_dlp
@@ -8,6 +10,8 @@ from data_manager import TRACKS_DATA, SPOTIFY_TRACKS
 from config import YDL_OPTIONS, FFMPEG_OPTIONS
 
 MAX_MESSAGE_LEN = 2000
+log = logging.getLogger("grob.player")
+
 # Скільки треків підряд можуть не завантажитись, перш ніж зупинимо відтворення
 MAX_FAILED_TRACKS = 5
 
@@ -155,7 +159,7 @@ class MusicPlayer:
                     # yt-dlp блокуючий — запускаємо в окремому потоці, щоб не вішати бота
                     stream_url = await asyncio.to_thread(self._extract_stream_url, url)
                 except Exception as e:
-                    print(f"[{guild.name}] Could not load {url}: {e}")
+                    log.error(f"[{guild.name}] Could not load {url}: {e}")
                     continue
 
                 voice_client = await self._wait_connected(guild)
@@ -164,25 +168,28 @@ class MusicPlayer:
                     return
 
                 try:
-                    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS))
+                    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(
+                        stream_url, stderr=subprocess.DEVNULL, **FFMPEG_OPTIONS))
                     voice_client.play(source, after=lambda err: self._after_track(guild, err))
                 except discord.ClientException as e:
-                    print(f"[{guild.name}] Playback error: {e}")
+                    log.error(f"[{guild.name}] Playback error: {e}")
                     self.current_playing_url[guild_id] = None
                     return
 
                 self.current_playing_url[guild_id] = url
+                track = find_track(url)
+                log.info(f"[{guild.name}] Now playing: {track['name'] if track else url}")
                 if guild_id in self.karaoke_channels:
                     await self._send_karaoke_lyrics(guild, url)
                 return
 
-            print(f"[{guild.name}] {MAX_FAILED_TRACKS} tracks in a row failed, playback stopped.")
+            log.error(f"[{guild.name}] {MAX_FAILED_TRACKS} tracks in a row failed, playback stopped.")
             self.current_playing_url[guild_id] = None
 
     def _after_track(self, guild, error):
         # Викликається з потоку аудіоплеєра, тому планування — тільки через threadsafe
         if error:
-            print(f"[{guild.name}] Player error: {error}")
+            log.error(f"[{guild.name}] Player error: {error}")
         asyncio.run_coroutine_threadsafe(self.play_next(guild), self.bot.loop)
 
     async def _send_karaoke_lyrics(self, guild, url):
@@ -195,4 +202,4 @@ class MusicPlayer:
                 f"🎤 **Зараз у караоке — {track['name']}:**\n\n{track.get('lyrics', 'No lyrics.')}"))
             self.active_lyrics_messages[guild.id] = msg
         except discord.HTTPException as e:
-            print(f"[{guild.name}] Could not send lyrics: {e}")
+            log.warning(f"[{guild.name}] Could not send lyrics: {e}")
